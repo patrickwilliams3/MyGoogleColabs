@@ -69,7 +69,7 @@ class ShiftRight(layers.Layer):
       x = tf.concat([tf.zeros([tf.shape(right)[0],right.shape[1],self.shift_count,right.shape[3]]),right[:,:,:-self.shift_count]],axis=2)
     return x
 
-def conv2(x,filter_count,kernel_size=(3,3),stride=1,dilation=(1,1),padding='same',use_bias=True,alpha=0.1,ifrelu=True,ifNorm=True,ifUpsample=False,output_padding=[0,0]):
+def conv2(x,filter_count,kernel_size=(3,3),stride=1,dilation=(1,1),padding='same',use_bias=True,alpha=0.2,ifrelu=True,ifNorm=True,ifUpsample=False,output_padding=[0,0]):
   if (ifUpsample == True):
     x = layers.Conv2DTranspose(filters=filter_count,kernel_size=kernel_size,strides=(stride,stride),padding=padding,use_bias=use_bias,output_padding=output_padding)(x) 
   else:
@@ -81,7 +81,7 @@ def conv2(x,filter_count,kernel_size=(3,3),stride=1,dilation=(1,1),padding='same
   return x
 
 
-def conv3(x,filter_count,kernel_size=(3,3,3),stride=1,padding='same',use_bias=True,alpha=0.1,ifrelu=True,ifNorm=True,ifUpsample=False,output_padding=[0,0,0]):
+def conv3(x,filter_count,kernel_size=(3,3,3),stride=1,padding='same',use_bias=True,alpha=0.2,ifrelu=True,ifNorm=True,ifUpsample=False,output_padding=[0,0,0]):
   if (ifUpsample == True):
     x = layers.Conv3DTranspose(filters=filter_count,kernel_size=kernel_size,strides=(stride,stride,stride),padding=padding,use_bias=use_bias,output_padding=output_padding)(x) 
   else:
@@ -148,7 +148,7 @@ def CNN3D_Basic(x,skipcount,filter_count=16):
   x = layers.Lambda(lambda xin: K.sum(xin, axis=1))(x)
   return x
 
-def CNN3D(x,skipcount=4,base_filter_count=16):
+def CNN3D(x,skipcount=4,filter_count=16):
   x = conv3(x,base_filter_count)
   x = conv3(x,base_filter_count)
   y = conv3(x,base_filter_count)
@@ -303,17 +303,12 @@ right_input = layers.Input(batch_shape=(batch_size,H,W,C))
 psmn = PSMN(left_input,right_input,disparity=192,skipcount=4,base_filter_count=32,basic3DCNN=False)
 psmn.summary()
 
-# class SaveWeights(tf.keras.callbacks.Callback):
-#   def on_epoch_end(self, epoch, logs=None):
-    #keras.models.save_model(psmn,'psmn.h5')
-    #files.download('psmn.h5')
 def smoothL1(y_true, y_pred, HUBER_DELTA = 1.0):
    x   = K.abs(y_true - y_pred)
    x   = K.switch(x < HUBER_DELTA, 0.5 * x ** 2, HUBER_DELTA * (x - 0.5 * HUBER_DELTA))
    return  K.sum(x)
 psmn.compile(optimizer=keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True),loss=smoothL1)
 
-###10 MINUTES PER EPOCH ON LOCAL MACHINE
 psmn.fit(x=[train[:training_count,:,:,:,0],train[:training_count,:,:,:,1]],y=[disparity[:training_count,:,:,np.newaxis]],
          batch_size=batch_size,epochs=100,validation_data=([train[training_count:,:,:,:,0],train[training_count:,:,:,:,1]],
         [disparity[training_count:,:,:,np.newaxis]]),callbacks=[keras.callbacks.ModelCheckpoint('psmn_weights.h5', monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=True, mode='auto', period=1)]
