@@ -364,7 +364,7 @@ def PSMN(left_input,right_input,disparity = -1,shiftcount=4, base_filter_count =
   right = right_input
   for i in range(disparity//shiftcount): 
     if i != 0:
-      right = ShiftRight(shiftcount=shiftcount,isLeft=False)(right); left = ShiftRight(shiftcount=shiftcount, isLeft=True)(left)
+      right = ShiftRight(shiftcount=shiftcount,isLeft=False)(right); left = left ##ShiftRight(shiftcount=shiftcount, isLeft=True)(left)
     
     rconv4_3,rconv2_16 = sharedCNN(right,[conv0_1,conv0_2,conv0_3],[conv1x,conv2x,conv3x,conv4x])
     r_spp = SPP(rconv4_3,rconv2_16,branch_1,branch_2,branch_3,branch_4,fusion1,fusion2,H=left_input.shape[1],W=left_input.shape[2])
