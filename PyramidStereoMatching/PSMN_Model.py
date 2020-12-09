@@ -7,6 +7,13 @@ import numpy as np
 
 class DisparityRegression(layers.Layer):
   def call(self, x):
+    '''
+    Purpose: Perform 3D disparity regression in Keras
+
+    x -- Layer fed into disparity regression
+
+    Returns: Output of x with disparity regression
+    '''
     pos = np.arange(int(x.shape[1]), dtype=np.float32)
     arr = tf.zeros(tf.shape(x))+(np.zeros((x.shape[1],x.shape[2],x.shape[3],x.shape[4]))+pos[:,np.newaxis,np.newaxis,np.newaxis])
     x *= arr
@@ -14,11 +21,21 @@ class DisparityRegression(layers.Layer):
 
 class ShiftRight(layers.Layer):
   def __init__(self, shiftcount, isLeft, **kwargs):
+    '''
+    Purpose: Define variables for layer
+    '''
     self.shiftcount = shiftcount
     self.isLeft = isLeft
     super(ShiftRight, self).__init__(**kwargs)
 
   def call(self, right):
+    '''
+    Purpose: Shift image left or right for comparison with other image in epipolar geometry
+
+    right -- Image fed into ShiftRight
+
+    Returns: Output of shifted image
+    '''
     if (self.isLeft == True): ##Remove first few rows of left
       x = tf.concat([tf.zeros([tf.shape(right)[0],right.shape[1],self.shiftcount,right.shape[3]]),right[:,:,self.shiftcount:]],axis=2)
     else: ##Remove last few rows of right
@@ -26,6 +43,23 @@ class ShiftRight(layers.Layer):
     return x
 
 def conv2(x,filter_count,kernel_size=(3,3),stride=1,dilation=(1,1),padding='same',use_bias=True,alpha=0.2,ifrelu=True,ifNorm=True,ifUpsample=False,output_padding=[0,0]):
+  '''
+  Purpose: Basic conv2 structure with Convolution+BatchNormalization+ReLU.
+
+  x -- Input layer
+  filter_count -- Number of filters to use
+  kernel_size -- Size of fitlers
+  stride -- Stride to move window when sliding kernel
+  dilation -- Dilation rate to use when performing convolution
+  use_bias -- Whether or not you want to include a bias in convolution
+  alpha -- Alpha value to use for x<0 in Leaky ReLU
+  ifrelu -- Whether or not to use relu
+  ifNorm -- Whether or not to use batch normalization
+  ifUpsample -- Determine whether you are using regular convolution or Conv2DTranspose
+  output_padding -- Padding applied to output for it to reach desired shape
+
+  Returns: Layer after basic conv2 structure applied in CNN
+  '''
   if (ifUpsample == True):
     x = layers.Conv2DTranspose(filters=filter_count,kernel_size=kernel_size,strides=(stride,stride),padding=padding,use_bias=use_bias,output_padding=output_padding)(x) 
   else:
@@ -37,6 +71,23 @@ def conv2(x,filter_count,kernel_size=(3,3),stride=1,dilation=(1,1),padding='same
   return x
 
 def conv3(x,filter_count,kernel_size=(3,3,3),stride=1,padding='same',use_bias=True,alpha=0.2,ifrelu=True,ifNorm=True,ifUpsample=False,output_padding=[0,0,0]):
+    '''
+  Purpose: Basic conv3 structure with Convolution+BatchNormalization+ReLU.
+
+  x -- Input layer
+  filter_count -- Number of filters to use
+  kernel_size -- Size of fitlers
+  stride -- Stride to move window when sliding kernel
+  padding -- Padding to use on image for convolution. 'same' == same output size as input.
+  use_bias -- Whether or not you want to include a bias in convolution
+  alpha -- Alpha value to use for x<0 in Leaky ReLU
+  ifrelu -- Whether or not to use relu
+  ifNorm -- Whether or not to use batch normalization
+  ifUpsample -- Determine whether you are using regular convolution or Conv2DTranspose
+  output_padding -- Padding applied to output for it to reach desired shape
+
+  Returns: Layer after basic conv3 structure applied in CNN
+  '''
   if (ifUpsample == True):
     x = layers.UpSampling3D(size=(stride,stride,stride))(x)
     x = layers.Conv3D(filters=filter_count,kernel_size=kernel_size,strides=(1,1,1),padding=padding,use_bias=use_bias)(x)
@@ -49,11 +100,29 @@ def conv3(x,filter_count,kernel_size=(3,3,3),stride=1,padding='same',use_bias=Tr
   return x
 
 def afterConv(x):
+  '''
+  Purpose: Apply normal batch normalization and leaky relu proccess used after convolution
+
+  x -- Input layer
+
+  Returns: Layer after normal procedure following convolution
+  '''
   x = layers.BatchNormalization()(x)
   x = layers.LeakyReLU(alpha=0.2)(x)
   return x
 
 def makeBranch(x,branchx,pool_size,H=128,W=512):
+  '''
+  Purpose: Make a branch for different pooling sized within the Spatial Pyramid Pooling Module
+
+  x -- Input layer
+  branchx -- Branch layer you want to feed the input through
+  pool_size -- The size of pooling you want to use
+  H -- Height of the image input
+  W -- Width of the image input
+
+  Returns: Output of pooling layer into branch
+  '''
   branch = layers.AveragePooling2D(pool_size=(pool_size,pool_size))(x)
   branch = branchx(branch)
   branch = afterConv(branch)
@@ -67,6 +136,20 @@ def makeBranch(x,branchx,pool_size,H=128,W=512):
   return branch
 
 def SPP(x,y,branch1,branch2,branch3,branch4,fusion1,fusion2,max_pool_size=32,H=128,W=512):
+  '''
+  Purpose: Structure for Spatial Pyramind Pooling in PSMN paper. Pools the input layer at different sized to search for features at
+  different location spaces to find comparing pixels in different images
+
+  x -- Input layer to undergo pooling at different branches
+  y -- Layer to concatenate output of branches to
+  branch1,2,3,4 -- Branch layers to feed x through
+  fusion1 -- First convolutional layer to fuse x,y,and branch outputs together
+  fusion2 -- Second convolutional layer to fuse together after fusion1
+  max_pool_size -- The max size you would like to pool by in branches
+  H -- Height of image input
+  W -- Width of image input
+
+  '''
   branch1 = makeBranch(x,branch1,max_pool_size,H=H,W=W)
   branch2 = makeBranch(x,branch2,int(max_pool_size/2),H=H,W=W)
   branch3 = makeBranch(x,branch3,int(max_pool_size/4),H=H,W=W)
@@ -80,15 +163,37 @@ def SPP(x,y,branch1,branch2,branch3,branch4,fusion1,fusion2,max_pool_size=32,H=1
   return fusion
 
 def cost_volume(x,y):
+  '''
+  Purpose: Concatenate x and y together to make cost volume
+
+  Returns: Cost Volume
+  '''
   return layers.Concatenate()([x,y])
 
 def ResLayer(x,filter_count):
+  '''
+  Purpose: Typical residual-layer procedure in PSMN for basic CNN structure
+
+  x -- Input layer
+  filter_count -- Number of filters output to use
+
+  Returns -- Output layer of residual-layer
+  '''
   y = conv3(x,filter_count)
   y = conv3(y,filter_count)
   y = layers.add([y,x])
   return y
 
 def CNN3D_Basic(x,filter_count,upSampleStride=4):
+  ''' 
+  Purpose: The Basic CNN3D structure defined in PSMN
+  
+  x -- Input layer
+  filter_count -- How many filters deep you want to use (64 used in paper)
+  upSampleStride -- Stride needed to upsample with
+
+  Returns: Output of Basic CNN3D structure defined in PSMN
+  '''
   x = conv3(x,filter_count)
   x = conv3(x,filter_count)
   for i in range(4):
@@ -103,6 +208,15 @@ def CNN3D_Basic(x,filter_count,upSampleStride=4):
   return x
 
 def CNN3D(x,filter_count,upSampleStride=4):
+  '''
+  Purpose: Perform more complex CNN3D in PSMN with upsampling, downsampling, and residual layers
+
+  x -- Input layer
+  filter_count -- Depth of filters to use
+  upSampleStride - Neccessary upsample stride
+
+  Returns: Output of CNN3D structure defined in PSMN paper
+  '''
   x = conv3(x,filter_count)
   x = conv3(x,filter_count)
   y = conv3(x,filter_count)
@@ -168,6 +282,15 @@ def CNN3D(x,filter_count,upSampleStride=4):
   return [output1,output2,output3]
 
 def sharedCNN(x, layers = [], arraysOfLayers = []):
+  '''
+  Purpose: Initial convolutional neural network architecture to extract key features from images used in PSMN
+
+  x -- Input layers
+  layers -- Layers that you want to feed through
+  arraysOfLayers -- Array of array of following layers to feed through
+
+  Returns: Output layer of initial convolutional neural network architecture
+  '''
   conv2_16 = x
   for i in layers:
     x = i(x)
@@ -182,6 +305,20 @@ def sharedCNN(x, layers = [], arraysOfLayers = []):
   return [conv2_16,conv4_3]
 
 def PSMN(left_input,right_input,disparity = -1,shiftcount=4, base_filter_count = 32, kernel_size = 3, use_bias = True, basic3DCNN = False):
+  '''
+  Purpose: Create PSMN model defined in PSMN paper
+
+  left_input -- Left image
+  Right_input -- Right image
+  disparity -- Maximum disparity to use.
+  shiftcount -- How far you want to shift the right image for every shift
+  base_filter_count -- Depth of filters that you want to use. More results in a more complex model that can achieve better accuracy, but bigger and longer to train.
+  kernel_size -- Size of kernels to use
+  use_bias -- Do you want to use bias' in model
+  basid3dCNN - Whether to use the basic or complex version of the model.
+
+  Returns: PSMN Model
+  '''
   if left_input.shape != right_input.shape:
     print("Error: Left and Right Input shape must be the same")
     break
@@ -249,6 +386,15 @@ def PSMN(left_input,right_input,disparity = -1,shiftcount=4, base_filter_count =
     return Model(inputs=[left_input,right_input],outputs=[output1,output2,output3])
 
 def smoothL1(y_true, y_pred, HUBER_DELTA = 1.0):
+  '''
+  Purpose: Define smoothL1 loss function
+
+  y_true -- True values
+  y_pred -- Predicted values
+  HUBER_DELTA -- Hyperparamater used in loss function
+
+  Returns: The smooth L1 loss
+  '''
    x   = K.abs(y_true - y_pred)
    x   = K.switch(x < HUBER_DELTA, 0.5 * x ** 2, HUBER_DELTA * (x - 0.5 * HUBER_DELTA))
    return  K.sum(x)
