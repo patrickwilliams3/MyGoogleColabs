@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 
 class DisparityRegression(layers.Layer):
-  def call(self, x):
+  def __call__(self, x):
     '''
     Purpose: Perform 3D disparity regression in Keras
 
@@ -28,7 +28,7 @@ class ShiftRight(layers.Layer):
     self.isLeft = isLeft
     super(ShiftRight, self).__init__(**kwargs)
 
-  def call(self, right):
+  def __call__(self, right):
     '''
     Purpose: Shift image left or right for comparison with other image in epipolar geometry
 
