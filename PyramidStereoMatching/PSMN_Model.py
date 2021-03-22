@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 
 class DisparityRegression(layers.Layer):
-  def call(self, x):
+  def __call__(self, x):
     '''
     Purpose: Perform 3D disparity regression in Keras
 
@@ -28,7 +28,7 @@ class ShiftRight(layers.Layer):
     self.isLeft = isLeft
     super(ShiftRight, self).__init__(**kwargs)
 
-  def call(self, right):
+  def __call__(self, right):
     '''
     Purpose: Shift image left or right for comparison with other image in epipolar geometry
 
@@ -88,16 +88,16 @@ def conv3(x,filter_count,kernel_size=(3,3,3),stride=1,padding='same',use_bias=Tr
 
   Returns: Layer after basic conv3 structure applied in CNN
   '''
-  if (ifUpsample == True):
-    x = layers.UpSampling3D(size=(stride,stride,stride))(x)
-    x = layers.Conv3D(filters=filter_count,kernel_size=kernel_size,strides=(1,1,1),padding=padding,use_bias=use_bias)(x)
-  else:
-    x = layers.Conv3D(filters=filter_count,kernel_size=kernel_size,strides=(stride,stride,stride),padding=padding,use_bias=use_bias)(x)
-  if (ifNorm == True):
-    x = layers.BatchNormalization()(x)
-  if (ifrelu == True):
-    layers.LeakyReLU(alpha=alpha)(x)
-  return x
+    if (ifUpsample == True):
+      x = layers.UpSampling3D(size=(stride,stride,stride))(x)
+      x = layers.Conv3D(filters=filter_count,kernel_size=kernel_size,strides=(1,1,1),padding=padding,use_bias=use_bias)(x)
+    else:
+      x = layers.Conv3D(filters=filter_count,kernel_size=kernel_size,strides=(stride,stride,stride),padding=padding,use_bias=use_bias)(x)
+    if (ifNorm == True):
+      x = layers.BatchNormalization()(x)
+    if (ifrelu == True):
+      layers.LeakyReLU(alpha=alpha)(x)
+    return x
 
 def afterConv(x):
   '''
@@ -321,12 +321,12 @@ def PSMN(left_input,right_input,disparity = -1,shiftcount=4, base_filter_count =
   '''
   if left_input.shape != right_input.shape:
     print("Error: Left and Right Input shape must be the same")
-    break
+    return
   if disparity==-1:
     disparity = right_input.shape[2]//4 - (right_input.shape[2]//4%4)
   if disparity%4 != 0:
     print("Disparity must be multiple of four")
-    break
+    return
   
   ##CNN Layers
   conv0_1 = layers.Conv2D(filters=base_filter_count,kernel_size=kernel_size,strides=(2,2),dilation_rate=(1,1),padding='same',use_bias=use_bias)
@@ -395,6 +395,6 @@ def smoothL1(y_true, y_pred, HUBER_DELTA = 1.0):
 
   Returns: The smooth L1 loss
   '''
-   x   = K.abs(y_true - y_pred)
-   x   = K.switch(x < HUBER_DELTA, 0.5 * x ** 2, HUBER_DELTA * (x - 0.5 * HUBER_DELTA))
-   return  K.sum(x)
+  x   = K.abs(y_true - y_pred)
+  x   = K.switch(x < HUBER_DELTA, 0.5 * x ** 2, HUBER_DELTA * (x - 0.5 * HUBER_DELTA))
+  return  K.sum(x)
